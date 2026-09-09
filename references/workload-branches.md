@@ -1,76 +1,52 @@
-# Workload branches
+# 负载与指标分支
 
-Select the branch from the user's actual work item. Combine branches only when the production request truly combines them.
+## 在线文本/对话
 
-## Interactive text or chat
+- 重点：首个可用 Token、TPOT/ITL、端到端时延、会话体验、输出吞吐和成功率。
+- 固定多轮历史、Reasoning、Streaming、输出长度和 Stop。
+- 同时测试平稳与突发流量。
 
-- Primary metrics: time to first usable token, TPOT/inter-token latency, end-to-end latency, per-user responsiveness, aggregate token throughput, and success.
-- Freeze system/chat template, session history, output length, streaming behavior, reasoning policy, and stop conditions.
-- Test realistic multi-turn history and burst arrival, not only independent short prompts.
+## Coding 或 Tool-using Agent
 
-## Coding or tool-using agent
+- 重点：首个 Reasoning/Content Token、TPOT、任务总时长、工具正确率、迭代次数、任务成功和可执行正确率。
+- Token 微基准用于定位引擎，但不能替代真实仓库/Sandbox 任务。
+- 分开记录模型、工具、代码仓 I/O、Context 构造、Agent 编排和网关时间。
 
-- Primary metrics: first reasoning/content token, TPOT, task completion time, tool-call correctness, iteration count, success/correctness, and recovery from tool errors.
-- Use repository or sandbox tasks with executable verification. A token microbenchmark is necessary for engine analysis but insufficient for agent quality.
-- Separate model time, tool execution, repository I/O, client orchestration, context construction, and gateway time.
-- Preserve the actual reasoning/tool protocol. HTTP success with no usable content/tool call is failure.
+## 长上下文/RAG
 
-## Long-context or RAG
+- 重点：TTFT、Prefill 吞吐、检索时延、KV/缓存容量、命中率、稳定并发、远距离证据正确率和恢复。
+- 按实际 Token 分布和前缀复用分层，冷/热结果分开。
+- 最大上下文可用不等于最大上下文下可以高并发。
 
-- Primary metrics: TTFT, prefill throughput, retrieval latency, KV-cache capacity, cache hit rate, stable concurrency, correctness over distant evidence, and recovery.
-- Stratify by actual token distribution and prefix reuse. Test cold and warm prefixes separately.
-- Maximum context support is a functional boundary; it does not imply that maximum-context high concurrency is safe.
+## 离线批处理
 
-## Offline or batch generation
+- 重点：work items/s、Token 或媒体吞吐、总 Makespan、利用率、失败/重试和单位成本。
+- 使用固定积压或 Open-loop 到达；不能只统计成功子集。
 
-- Primary metrics: completed work items/s, total token throughput, makespan, utilization, failure/retry rate, and cost per successful item.
-- Use open-loop arrival or a fixed backlog. TTFT may be secondary unless downstream stages depend on early output.
-- Tune batching for sustained throughput while preserving output completeness and fairness constraints.
+## 视觉语言、文档或视频理解
 
-## Vision-language, document, or video understanding
+- 重点：requests/s、images/pages/frames/video-seconds/s、预处理、视觉 Token、端到端时延、内存和质量。
+- 固定图片数、分辨率、页数、帧采样、Codec、媒体传输、OCR 和输出 Schema。
+- 唯一文档流量不能用重复媒体缓存结果代表。
 
-- Primary units: requests/s plus images/pages/frames/video-seconds/s, end-to-end latency, preprocessing time, visual token count, memory, and task quality.
-- Freeze resolution, image count, pages, frame sampling, codecs, media transfer format, OCR preprocessing, and structured-output schema.
-- Separate media decode/preprocess, transfer, model prefill/decode, and post-processing.
-- Repeated-media cache tests must not represent unique-document production traffic.
+## Embedding/重排
 
-## Embedding or reranking
+- 重点：queries/s、documents/s、P50/P95/P99、Padding 浪费、最大序列、内存、Recall/nDCG/MRR 和成本。
+- 不使用生成模型的 TTFT/TPOT 口径。
 
-- Primary metrics: queries/s, documents/s, P50/P95/P99 latency, batch efficiency, maximum sequence length, memory, recall/nDCG/MRR, and cost.
-- Freeze query/document length distributions and candidate counts. Do not report token-generation metrics.
-- Compare dynamic versus fixed batching and include padding waste.
+## 语音
 
-## Speech or audio
+- 重点：Real-time Factor、首个 Partial/Audio、audio-seconds/s、端到端时延、WER/任务质量和 Streaming 稳定性。
+- 固定采样率、声道、时长、Chunk、VAD、语言和 Codec。
 
-- Primary metrics: real-time factor, time to first partial result/audio, audio-seconds/s, end-to-end latency, word/error or task quality, and streaming stability.
-- Freeze sample rate, channels, duration distribution, chunk size, VAD, language, and codec.
-- Separate audio decoding, feature extraction, model inference, and synthesis/network playback.
+## 图像/视频生成
 
-## Image or video generation
+- 重点：首个预览、生成时延、samples/s、pixels/frames/s、利用率、内存、失败和质量。
+- 固定分辨率、时长、Steps、Sampler、Guidance、Seed 和后处理。
 
-- Primary metrics: time to first preview if supported, end-to-end generation latency, samples/s, pixels or frames/s, accelerator utilization, memory, failure rate, and quality metric/human review.
-- Freeze resolution, duration, steps, sampler, guidance, seed policy, batch size, and safety/post-processing.
-- Precision, quantization, step reduction, and resolution changes require separate quality series.
+## 结构化输出/Function Calling
 
-## Structured output or function calling
+- 作为横向分支，记录 Schema 有效率、工具选择、参数正确率、恢复行为和空响应。
+- 压力后再次验证，避免只通过启动冒烟。
 
-Apply this as a cross-cutting branch:
-
-- Record schema validity, exact function/tool selection, argument validity, recovery behavior, and empty-output rate.
-- Include tool definitions and parser version in the acceptance contract.
-- Re-run after sustained load; startup smoke alone may miss graph, parser, or routing failures.
-
-## Branch-specific parameter selection
-
-After identifying the bottleneck, choose runtime-specific controls that express these general concepts:
-
-- batch formation and maximum in-flight work;
-- replica and tensor/data/pipeline/expert/context parallelism;
-- memory fraction, KV or feature cache, offload, and input limits;
-- graph capture/compile shapes and kernel implementations;
-- speculative decoding or early-exit behavior;
-- communication overlap, expert balancing, and collective algorithms;
-- preprocessing workers, CPU affinity, I/O, and media cache;
-- admission control, queue policy, timeout, retry, and streaming transport.
-
-Parameter names and safe ranges must come from the exact model/runtime/hardware combination, not this generic branch guide.
+参数名和范围必须来自当前模型、运行时与硬件。各分支只定义问题和指标，不提供固定最佳值。

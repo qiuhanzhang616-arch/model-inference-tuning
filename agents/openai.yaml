@@ -1,4 +1,4 @@
 interface:
   display_name: "模型推理性能调优"
-  short_description: "适配不同模型、硬件与业务场景的可回退性能调优工作流"
-  default_prompt: "使用 $model-inference-tuning 先完成调优前问询，再制定适合当前模型与场景的实验方案。"
+  short_description: "先确认目标与可比基线，再进行可回退的模型性能调优"
+  default_prompt: "使用 $model-inference-tuning 先完成调优前问询和基线确认，再设计当前项目的候选实验。"

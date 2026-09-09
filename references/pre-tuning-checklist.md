@@ -1,101 +1,82 @@
-# Pre-tuning checklist
+# 调优前问询清单
 
-Use this checklist at the beginning of every new tuning project. Ask it in two phases so the user can start with business facts and provide infrastructure detail later.
+每个新项目先问。预填已有信息，用户不知道的技术项标为“允许只读检查”或“待确认”。
 
-## Phase A — required before proposing a tuning plan
+## A. 调优目标
 
-Send the user the following grouped questions. Pre-fill known answers and ask them to correct anything wrong.
+1. 要改善什么：TTFT/首个可用输出、TPOT、端到端时延、系统吞吐、并发、上下文/输入容量、资源利用率、成本还是稳定性？
+2. 哪些是硬门槛，具体目标值是什么？哪些只是优化方向？
+3. 不能退化什么：准确率、Reasoning、Tool Calling、结构化输出、上下文能力、可用性或成本？允许的波动是多少？
+4. 优先优化单请求体验、总体容量、每用户公平性还是单位成本？优先级如何？
 
-### 1. Goal and acceptance criteria
+## B. 模型与工件
 
-1. What problem are we solving: latency, throughput, concurrency, maximum input/context, cost, utilization, stability, or a combination?
-2. Which goals are hard requirements, and which are preferences? Give target values where possible.
-3. What must not regress: accuracy, tool calling, output format, reasoning quality, context capability, availability, or cost?
-4. Is the objective single-request performance, total system capacity, user experience, or SLA under sustained load?
+1. 模型名称、版本、不可变 Revision 和权重来源是什么？
+2. Dense/MoE、参数量/激活参数、模型任务和是否 Reasoning？
+3. 精度/量化、Tokenizer/Processor、Chat Template、Adapter 和自定义代码是什么？
+4. 当前与目标上下文/输入上限、输出上限是什么？
+5. 是否要求 Streaming、Reasoning、Tools、JSON、图片、音频、视频、Embedding、重排或 Speculative？
 
-### 2. Model and artifact
+## C. 真实业务负载
 
-1. Exact model name/version and artifact source or immutable revision?
-2. Model type: dense/MoE, reasoning/non-reasoning, generative/embedding/reranking/multimodal/speech/diffusion?
-3. Parameter scale, active parameters if MoE, precision/quantization, tokenizer/processor, and chat template?
-4. Advertised and operational context/input limits? Expected output limit?
-5. Required capabilities: streaming, reasoning, tools, JSON/schema, images, audio, video, adapters, or speculative decoding?
+1. 给出一个真实输入、期望输出和成功定义。
+2. 在线交互、Agent、批处理或混合？
+3. 输入 P50/P95/最大值及单位是什么？输出 P50/P95/最大值是什么？
+4. 平均、峰值、突发并发/QPS 和会话持续时间是什么？Open-loop 还是 Closed-loop？
+5. Streaming、Thinking/Reasoning、Temperature、Stop、Tool 和重试策略是什么？
+6. 重复前缀/媒体/文档、缓存命中率、多轮历史和请求间隔是什么？
+7. 预处理、检索、工具执行和后处理是否计入用户体验？
 
-### 3. Business workload
+## D. 当前平台和运行时
 
-1. Describe one real request and its expected correct output.
-2. Online interactive, agentic, batch, or mixed?
-3. Input size distribution: P50, P95, maximum, and units such as tokens, images, pixels, pages, frames, seconds, or documents.
-4. Output size distribution and stop behavior.
-5. Expected average, peak, and burst concurrency/QPS; open-loop arrival rate or closed-loop sessions?
-6. Streaming or non-streaming? Multi-turn/session history? Thinking mode or effort?
-7. Repeated prefixes/media/documents and expected cache hit ratio?
-8. Tool calls, structured output, retrieval, preprocessing, or post-processing in the critical path?
+1. 平台、Region/AZ、服务类型和调用链是什么？
+2. 加速器型号/代际、每卡内存、卡数、节点数、CPU/RAM，资源是否独占？
+3. 推理框架、版本、镜像标签/摘要、驱动/工具链/固件是什么？
+4. 当前副本和 TP/DP/PP/EP/CP/PD 拓扑是什么？
+5. 实际运行的启动参数、环境变量、批处理、序列数、内存、缓存、图编译、Kernel、Speculative 和通信设置是什么？
+6. 近期是否发生版本、参数、流量、客户端、网关、网络或数据变化？
 
-### 4. Quality and benchmark
+## E. 当前问题和测量口径
 
-1. Which real dataset or representative samples may be used?
-2. How is correctness decided: executable tests, labels, recall/precision, schema, judge, human review, or media metric?
-3. Required benchmark tool, protocol, request format, sampling parameters, and random seed?
-4. Required input × concurrency matrix, request count, repeats, and maximum test duration?
-5. Should results represent cold, warm, cached, mixed, or steady-state production traffic?
+1. 具体慢在哪里、从何时开始、在哪种请求形状下出现？
+2. 当前测得哪些数值，公式和计时点是什么？
+3. 对照基线是否使用同一模型工件、硬件、路径、请求、并发、缓存和时间窗口？
+4. 是否存在 OOM、Preemption、空响应、重试、超时、实例重启、通信或 Kernel 错误？
+5. 客户端是否正确处理 Streaming、Reasoning、Tool/JSON 字段和结束事件？
 
-### 5. Current symptom and comparison
+## F. 测试与质量
 
-1. What is slow or unstable, since when, and under which exact request shape?
-2. Current measured values and formulas? Where are timestamps taken?
-3. What changed around the regression: model, image, parameters, traffic, client, gateway, network, or data?
-4. What is the comparison baseline, and is it the same model artifact, hardware, path, workload, and cache state?
+1. 使用真实数据、公开 Benchmark 还是合成数据？谁提供、是否可留存？
+2. 正确性由测试用例、标签、Recall/Precision、Schema、Judge 还是人工判定？
+3. 固定 Prompt、采样、随机种子、输出长度和请求协议是什么？
+4. 输入 × 输出 × 并发 × 模式的完整矩阵、请求数、重复次数和最长测试时间是什么？
+5. 结果代表冷、热、缓存、混合还是稳态流量？
 
-At the end of Phase A, restate the answers, unknowns, proposed workload branch, and preliminary metric set. Do not propose fixed tuning values while critical items remain unknown.
+## G. 监控和瓶颈证据
 
-## Phase B — required before changes or formal load
+1. 是否能看到每实例/Rank 的请求、队列、缓存、显存/HBM、利用率、通信、CPU、网络和错误？
+2. 是否有客户端、网关和模型端统一 Request ID 或时间戳？
+3. 是否有回归发生时段的历史日志和指标？
+4. 是否允许使用 Profiler；其开销和窗口是什么？
 
-### 6. Platform and hardware
+## H. 变更和回退授权
 
-1. Cloud/on-prem platform, Region/AZ, service type, and deployment architecture?
-2. Accelerator vendor/model/generation, memory per device, cards per node, node count, and whether resources are dedicated or shared?
-3. Interconnect and network topology/bandwidth; storage type and model-loading path?
-4. CPU, RAM, NUMA/container limits, and any preprocessing nodes?
-5. Current replica count and parallelism topology: TP/DP/PP/EP/CP and PD separation if used?
+1. 允许调整哪些层：请求、网关、运行时、拓扑、硬件、模型工件或量化？
+2. 是否允许重启、停机、切流、扩缩容？维护窗口是什么？
+3. 最大测试负载、费用、资源和持续时间是多少？
+4. 当前稳定版本、备份位置、回退方法和回退时限是什么？
+5. 哪些错误或指标必须立即停止？谁批准最终候选？
 
-### 7. Runtime and effective configuration
+## 正式行动前确认块
 
-1. Inference framework/runtime, version, image tag and digest, driver/toolkit/firmware versions?
-2. Deployment scripts/config files and the actual running process arguments/environment?
-3. Current batching, sequence/concurrency, memory, cache, compile/graph, kernel, speculative, and communication settings?
-4. Health checks, autoscaling, queueing, rate limits, timeout, retry, and fallback behavior?
-5. Any warnings, unsupported flags, OOM, restarts, communication faults, empty responses, or serialization errors?
+- 场景分支与真实工作负载；
+- 硬目标、质量红线和指标公式；
+- 基线版本及其可比性；
+- 完整矩阵、格数、重复和预计时长；
+- 候选参数族与首轮变量；
+- 拟修改对象和影响范围；
+- 已批准的停机、资源、费用和负载；
+- 备份、回退与停止条件；
+- 未决风险。
 
-### 8. Request path and measurement point
-
-1. Full path from client to model, including SDK/agent, authentication, gateway, load balancer, proxy, preprocessing, and model endpoint?
-2. Can the direct model path and real application path both be tested?
-3. Where should latency start/end, and what counts as first usable output?
-4. Is streaming buffered or transformed anywhere? Are reasoning/tool deltas preserved?
-
-### 9. Observability and access
-
-1. Available metrics/logs/profilers for accelerator, memory, queues, per-rank requests, cache, communication, client, and gateway?
-2. Is historical telemetry available for the regression window?
-3. Which read-only systems may be inspected, and how will secrets be supplied without recording them?
-
-### 10. Change authority and safety
-
-1. May configuration be changed now? Which components are in scope?
-2. Is restart/redeploy/scaling allowed, and what downtime window is approved?
-3. Maximum load, cost, runtime, and resource limits for testing?
-4. Required backup location, known-good version, rollback method, and rollback deadline?
-5. Who approves the candidate for production, and which failures require immediate stop?
-
-Before execution, show a confirmation block containing:
-
-- confirmed scope and workload branch;
-- metric formulas and hard gates;
-- full matrix, total cells, repeats, and estimated duration;
-- exact components/files to change;
-- approved downtime/load/resource limits;
-- backup and rollback target;
-- unresolved risks.
-
-Proceed only after the user confirms this block or has already provided equivalent explicit authorization.
+用户确认后再执行变更或正式压力测试。

@@ -1,133 +1,129 @@
 ---
 name: model-inference-tuning
-description: Design, execute, and validate reproducible inference-performance tuning for different models, accelerators, frameworks, deployment platforms, and workloads. Use when users want to improve latency, throughput, concurrency, memory or accelerator utilization, context capacity, cost, stability, or quality under load. Covers online and batch text generation, coding agents, long-context/RAG, multimodal and document models, embeddings/rerankers, speech, and image/video generation; do not reuse historical parameter values without a new project baseline.
+description: 面向不同模型、加速器、推理框架、部署平台和业务负载，设计并执行可回退的推理性能调优。适用于改善延迟、吞吐、并发、上下文容量、资源利用率、成本或稳定性；开始前必须问清业务目标、真实负载、当前配置和质量约束，形成可比基线后再改参。GLM、Qwen、特定硬件和历史成绩仅作为按需加载的分支案例。
 ---
 
-# Model Inference Tuning
+# 模型推理性能调优
 
-Find the best **validated configuration for the current project**, not a universal parameter recipe. Model architecture, artifact, precision, hardware, runtime, request shape, quality target, and traffic pattern define a new experiment domain each time.
+目标是在当前项目的约束下找到“已验证候选中的最佳稳定配置”，而不是输出一套通用最佳参数。模型、权重、精度、硬件、运行时、请求形状、流量和质量标准任一变化，都可能形成新的实验域。
 
-## Mandatory first response
+## 第一步：先问清楚，再行动
 
-Whenever a user asks to start, plan, continue, or repeat tuning for a new project, first read [pre-tuning-checklist.md](references/pre-tuning-checklist.md).
+收到新项目的调优、性能回归或容量优化请求时，先完整读取 [调优前问询清单](references/pre-tuning-checklist.md)。
 
-1. Ask the Phase A questions before proposing parameters or a formal benchmark matrix.
-2. Ask the Phase B questions before changing configuration, restarting a service, scaling resources, or sending material load.
-3. Pre-fill answers already stated by the user or available in supplied files, but show them for confirmation. Mark unavailable facts as `unknown`; never invent them.
-4. Let the user answer in free text or by filling the checklist. Do not force the user to know implementation details that can be discovered read-only.
-5. If only a report, historical summary, or offline test harness is requested, complete that scoped work without treating missing production access as a blocker.
+1. 从对话、文件和只读运行证据中预填已知答案，并请用户确认。
+2. 在目标、工作负载、指标口径、质量红线和可变参数未明确前，不给出最终参数值，不修改服务。
+3. 能通过只读检查获得的进程参数、版本、拓扑和监控数据，不要求用户重复提供；未知项必须显式标记。
+4. 正式改参、重启、扩缩容或发送大量负载前，展示实验合同、变更对象、预计时长、停止条件和回退点，并取得授权。
 
-Do not prescribe GLM-, vLLM-, CUDA-, Ascend-, ModelArts-, or coding-specific settings during intake unless the current project actually uses them.
+## 选择负载分支
 
-## Route to the workload branch
+根据真实 work item 读取 [负载与指标分支](references/workload-branches.md) 中相应部分：
 
-After intake, read only the applicable section of [workload-branches.md](references/workload-branches.md). A project may combine branches, but each branch must retain its own workload shape and quality gate.
+- 在线文本/对话；
+- Coding 或 Tool-using Agent；
+- 长上下文/RAG；
+- 离线批处理；
+- 视觉语言、文档或视频理解；
+- Embedding/重排；
+- 语音；
+- 图像/视频生成；
+- 结构化输出/Function Calling。
 
-- Interactive text/chat
-- Coding or tool-using agent
-- Long-context or RAG
-- Offline/batch generation
-- Vision-language, document, or video understanding
-- Embedding or reranking
-- Speech/audio
-- Image/video generation
-- Structured output or function calling
+项目可以组合分支，但每个分支应保留自己的输入分布、性能指标和质量门槛。GLM/Qwen 项目额外读取 [GLM/Qwen 调优分支](references/branches/glm-qwen.md)。
 
-For the historical GLM-5.2 W4A8C8, Ascend A2, ModelArts, PD-separated coding case, read [branches/glm52-a2-pd-coding.md](references/branches/glm52-a2-pd-coding.md). It is an example branch, not the default path.
+## 冻结调优合同
 
-## Freeze the acceptance contract
+使用 [基线与实验模板](references/tuning-baseline.md) 记录并确认：
 
-Before benchmarking, write a manifest containing:
+- 模型工件、精度、运行时、硬件和实际拓扑；
+- 完整请求链路和测量位置；
+- 输入/输出分布、并发/QPS、缓存状态和全量测试矩阵；
+- 指标公式、质量与稳定性红线；
+- 允许修改的参数族、资源、停机和测试预算；
+- 基线版本、备份、停止条件和回退目标。
 
-- confirmed model artifact, precision, runtime, hardware, topology, and traffic path;
-- input/output distributions and full workload matrix;
-- metric formulas and measurement point;
-- cold, warm, cached, and steady-state definitions;
-- quality, correctness, stability, capacity, and cost gates;
-- allowed changes, downtime, test duration, stop conditions, and rollback target.
+多个输入长度、输出长度、并发或模式必须展开为完整笛卡尔积，并说明格数、重复次数和预计时长。若成本过高，可以建议“筛选阶段 + 完整复验”，但需要用户批准，不能静默少测。
 
-Expand every requested dimension into the complete Cartesian matrix and state total cells, repeats, and estimated duration. If the matrix is too expensive, ask the user to approve a staged screening design; do not silently omit cells.
+## 建立可信基线
 
-## Establish a trustworthy baseline
+建立四列事实账本：
 
-Create a four-way fact ledger:
+1. 用户认为的配置；
+2. 保存的脚本/控制台配置；
+3. 实际运行进程、环境、加载工件和日志；
+4. 冻结负载下的观测指标。
 
-1. Intended configuration.
-2. Saved deployment files or UI values.
-3. Actual process arguments, environment, loaded artifact, and runtime logs.
-4. Observed metrics under the frozen workload.
+先解决不一致，再调优。目录名、配置文件、控制台版本或启动成功都不能证明参数实际生效。
 
-Resolve mismatches before tuning. A file name, release label, service version, or successful startup does not prove which parameters are effective.
+在条件允许时，用完全相同的请求分别测试最短模型路径和真实业务路径，拆分客户端、预处理、鉴权、网关、网络、排队、重试、推理和后处理。分布式运行时必须检查所有实例和 Rank，不能只看总平均值。
 
-Benchmark the shortest direct model path and the real application path with identical requests when possible. This separates model execution from client, preprocessing, authentication, gateway, network, queueing, retry, and post-processing delay.
+基线至少包括：
 
-Collect per-instance and per-rank metrics rather than one aggregate whenever the runtime is distributed. Verify actual accelerator count, visibility, topology, memory, health, queue state, restarts, and error logs.
+- 功能和质量通过；
+- 冷/热/混合缓存定义；
+- 请求级 P50/P95/P99 和系统吞吐；
+- 成功、失败、超时、重试和空响应；
+- 加速器、显存/HBM、通信、CPU、网络、存储、队列和缓存；
+- 压力后恢复和健康状态。
 
-## Choose metrics for the branch
+## 按瓶颈形成候选
 
-Do not force token metrics onto non-token workloads.
+只根据证据选择参数族：
 
-Common metrics include:
+1. 请求构造、预处理和输出策略。
+2. 准入、排队、批处理和调度。
+3. 副本以及 TP/DP/PP/EP/CP/PD 等拓扑。
+4. 上下文/输入限制、缓存和内存分配。
+5. Kernel、Attention、图编译、Speculative、MoE 和通信优化。
+6. 精度/量化，仅在用户接受且质量门槛明确时。
+7. 客户端、网关、传输、Streaming、超时和重试。
 
-- Latency: end-to-end P50/P95/P99/max, queue time, service time, and time to first usable output.
-- Throughput: requests/s, tokens/s, images/s, pages/s, frames/s, audio-seconds/s, or samples/s.
-- Capacity: stable concurrency/QPS, maximum input/output shape, memory headroom, and queue recovery.
-- Efficiency: accelerator utilization, memory bandwidth/capacity, communication, CPU, network, storage, power, and cost per successful work item.
-- Reliability: success, timeout, retry, empty/invalid response, restart, OOM, preemption, and recovery time.
-- Quality: task-specific correctness, recall/precision, schema validity, tool accuracy, semantic quality, or media-quality score.
+每个候选记录：唯一变化、假设、预期指标方向、潜在副作用、测试方法、晋升条件和回退条件。一次只改变一个独立变量；必须成组的参数要明确声明为一个 Bundle。
 
-For streaming reasoning models, count the first `reasoning_content` or equivalent model delta as first output when measuring TTFT. Keep per-request output rate separate from aggregate system throughput. Include failed requests and retry time in SLA calculations.
+硬件代际、模型架构或运行时专用参数必须由当前镜像/版本的支持证据和启动日志确认。不得从其他模型、其他卡型或其他 Region 直接复制。
 
-## Form tuning hypotheses
+## 指标纪律
 
-Use observed bottlenecks to choose candidates. Typical tuning families are:
+- 不把 per-request TPS 与 aggregate TPS 混为一谈。
+- 流式推理模型的 TTFT 从请求开始到首个 `reasoning_content` 或等价模型增量；若业务只认可最终内容，另报 time-to-first-content。
+- TPOT 只对至少两个输出 Token 的请求计算，并保留公式。
+- 整批 wall time 包含失败、排队和重试；成功子集不能冒充 SLA。
+- 非 Token 模型使用 requests/s、images/s、pages/s、frames/s、audio-seconds/s 或 samples/s 等实际单位。
+- 正确率、Tool Calling、Schema、召回率或媒体质量必须与性能同时验收。
 
-1. Request formation and preprocessing.
-2. Admission control, batching, scheduling, and queueing.
-3. Parallelism and replica/node topology.
-4. Context/shape limits, cache strategy, and memory allocation.
-5. Kernel, graph/compile, attention, speculative decoding, and communication features.
-6. Precision or quantization, only with an explicit quality gate.
-7. Client, gateway, transport, retry, timeout, and streaming behavior.
+不得通过缩小真实输入、缩短输出、关闭 Reasoning、降低上下文能力、改变缓存复用率、隐藏失败或启用 Fallback 来制造性能提升。若用户接受这些业务取舍，建立独立结果序列并明确标记。
 
-Change one independent variable at a time, or identify an inseparable bundle and explain it. Define the expected metric direction, failure mode, and rollback condition before execution. Hardware- or model-generation-specific flags require support evidence from the exact runtime/image.
+## 安全执行与回退
 
-Do not improve a result by quietly reducing input size, output length, reasoning work, context capability, quality threshold, unique-data ratio, or failure accounting. Those are product tradeoffs and need explicit approval plus a separate result series.
+变更前：
 
-## Apply and test safely
+- 保存实际在线文件、镜像/工件、完整进程参数和哈希；
+- 准备不依赖候选目录的回退步骤；
+- 确认用户批准的组件、停机、资源、费用、时长和负载范围。
 
-Before an approved mutation:
+执行顺序：
 
-- back up exact live files/artifacts and record hashes;
-- record service/deployment/image identifiers and full effective runtime;
-- prepare an executable rollback independent of the candidate files;
-- confirm the user-authorized downtime, load, and resource scope.
+1. 功能冒烟与质量门槛。
+2. 预热/懒编译特征。
+3. 小规模候选筛选。
+4. 同条件基线/Candidate A/B。
+5. 完整矩阵和质量测试。
+6. 边界、持续压力和恢复。
+7. 压力后功能、健康和错误回归。
 
-Execute in stages:
+出现 OOM、进程死亡、通信/Kernel 错误、空响应、质量越线、重试失控或无法恢复时停止发送新负载并按合同回退。用户说暂停时立即停止发新请求，不把旧授权延伸到下一候选。
 
-1. Readiness and functional smoke.
-2. Warm-up/compile characterization.
-3. Small performance screening.
-4. Same-condition baseline/candidate A/B.
-5. Full matrix and quality suite.
-6. Boundary, sustained-load, and recovery tests.
-7. Post-stress functional and health regression.
+## 晋升与交付
 
-Label cold, warm, cached, mixed, and steady-state results separately. Repeat material wins. Stop new load and roll back on agreed hard failures such as OOM, process death, invalid/empty output, unacceptable quality loss, communication/kernel errors, runaway retries, or failure to recover.
+只有性能目标、成功率、质量、稳定性和恢复全部满足，且关键收益至少复测一次，候选才能晋升。最终交付：
 
-## Select and report
+- 问询答案、未决项和调优合同；
+- 基线事实账本；
+- 每个候选的参数 Diff、假设、结果和结论；
+- 全矩阵性能、质量、失败和资源数据；
+- 已接受与已拒绝候选及原因；
+- 当前实际运行状态、备份和回退方法；
+- 明确区分测量事实、合理推断和待验证建议。
 
-Call a candidate “best” only among the tested configurations and only if it satisfies all hard gates. Report:
-
-- intake answers and remaining unknowns;
-- acceptance contract and exact metric definitions;
-- baseline fact ledger;
-- candidate diffs and hypotheses;
-- raw and summarized results, including failures;
-- resource and bottleneck evidence;
-- quality/stability comparison;
-- accepted and rejected candidates with reasons;
-- current running state and rollback procedure;
-- measured conclusions, reasonable inferences, and untested recommendations as separate categories.
-
-Keep secrets out of artifacts. Historical scores and parameters may illustrate method but must never become another project's baseline or promise.
+只称为“本轮已测候选中的最佳稳定配置”，不宣称全局最优。报告不得包含密码、API Key、Cookie、OTP 或私钥。
